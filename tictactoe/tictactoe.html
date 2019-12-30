@@ -1,0 +1,420 @@
+<head>
+<script src="jquery-3.3.1.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/2.8.0/Chart.bundle.min.js"></script>
+</head>
+
+
+<style type="text/css">
+    
+    canvas{
+        border: solid 1px black;
+    }
+
+</style>
+
+<body>
+    <br>
+<div class="container">
+    <H4>TicTacToe - Reinforcement Learning</H4>
+    <div class="row">
+        <div class="col-sm-6" id="game">
+        </div>
+        <div style="max-height: 200px;">
+        <canvas id="myChart" width="400" height="400"></canvas>
+        <div>
+    </div>
+    <div>
+         speed:<input type="number" name="speed" id="gameSpeed"><input type="button" value="set speed" id="setGameSpeed">
+    </div>
+    <div>
+        <input type="button" value="Reset Values" id="reset">
+    </div>
+</div>
+</body>
+
+<script>
+    function _clamp(num, min, max){
+        return num <= min ? min : num >= max ? max : num;
+    }
+
+    function _get_mouse_pos(canvas, evt) {
+        var rect = canvas.getBoundingClientRect();
+        return {
+          x: Math.floor((evt.clientX - rect.left) / (gameWidth / 3 )),
+          y: Math.floor((evt.clientY - rect.top) / (gameHeight / 3 ))
+        };
+    }
+
+    function _mouse_pos_to_index(mousePos){
+        var index = mousePos.x + mousePos.y * 3;
+        return index;
+    }
+
+    document.getElementById("game").innerHTML = '<canvas id="canvas" width="200" height="200"></canvas>';
+    var canvas = $("#canvas")[0];
+
+    canvas.addEventListener('mousemove', function(evt) {
+        mousePos = _get_mouse_pos(canvas, evt);
+    }, false);
+
+    canvas.addEventListener('click', function(evt) {
+        board._make_move(_mouse_pos_to_index(mousePos), currentPlayer)
+        if(currentPlayer == 1){
+            currentPlayer = 2;
+        }else{
+            currentPlayer = 1;
+        }
+        
+    }, false);
+
+
+    var ctx = canvas.getContext("2d");
+    var gameWidth = $("#canvas").width();
+    var gameHeight = $("#canvas").height();
+    var started = true;
+    var mousePos = {x: 0, y:0}
+    var currentPlayer = 1;
+    var playerWon = 0;
+    var numGame = 0;
+    var player1wins = 0;
+    var player2wins = 0;
+    var ties = 0;
+
+    class Board{
+        constructor(){
+            this.board = [0,0,0, 0,0,0, 0,0,0];
+        }
+
+        _reset(){
+            this.board = [0,0,0, 0,0,0, 0,0,0];   
+        }
+
+        _is_move_legal(pos){
+            if(this.board[pos] == 0){
+                return true;
+            }else{
+                return false;
+            }
+
+        }
+
+        _make_move(pos, player){
+            this.board[pos] = player
+            this._check_win(pos, player);
+        }
+
+        _check_win(pos, player){
+            var col = pos % 3
+            var row = Math.floor(pos / 3)
+            //console.log(col, row);
+            var win = [true, true, true];
+
+            //check horizontal
+            for(var x = 0; x < 3; x++){
+                //console.log(this.board[x + row * 3])
+                if(this.board[x + row * 3] != player){
+                    win[0] = false;
+                }
+            }
+
+            //check vertical
+            for(var y = 0; y < 3; y++){
+                if(this.board[y * 3 + col] != player){
+                    win[1] = false;
+                }
+            }
+
+            //check diagnol
+            if(this.board[4] != player){
+                win[2] = false;
+            }
+            if(pos == 0){
+                if(this.board[8] != player){
+                    win[2] = false;
+                }
+            }
+            if(pos == 2){
+                if(this.board[6] != player){
+                    win[2] = false;
+                }
+            }
+            if(pos == 6){
+                if(this.board[2] != player){
+                    win[2] = false;
+                }
+            }
+            if(pos == 8){
+                if(this.board[0] != player){
+                    win[2] = false;
+                }
+            }
+
+            if(pos == 4){
+                if(this.board[0] != player || this.board[8] != player){
+                    win[2] = false;
+                }else if(this.board[6] != player || this.board[2] != player){
+                    win[2] = false;
+                }   
+            }
+
+            if (!(pos == 0 || pos == 2 || pos == 4 || pos == 6 || pos == 8)){
+                win[2] = false
+            }
+
+            if(win.includes(true)){
+                playerWon = player;
+                return
+            }
+
+            if(!this.board.includes(0)){
+                playerWon = 3;
+                return
+            }
+
+
+        }
+
+
+        _draw_board(){
+            ctx.strokeStyle = "black";
+            //vertical lines
+            for(var x = 0; x < 3; x++){
+                ctx.beginPath();
+                ctx.moveTo(x * (gameWidth / 3), 0);
+                ctx.lineTo(x * (gameWidth / 3), gameHeight);
+                ctx.stroke(); 
+            }
+            //horizantal lines
+            for(var y = 0; y < 3; y++){
+                ctx.beginPath();
+                ctx.moveTo(0, y * (gameHeight / 3));
+                ctx.lineTo(gameWidth, y * (gameHeight / 3));
+                ctx.stroke();   
+            }
+
+            for(var i = 0; i < this.board.length; i++){
+                switch(this.board[i]){
+                    case 1:
+                        ctx.fillStyle = 'black';
+                        ctx.beginPath();
+                        ctx.fillRect( (i % 3) * (gameWidth / 3) + (((gameWidth/3) / 2) - 10), Math.floor(i / 3) * (gameHeight / 3) + (((gameHeight/3) / 2) - 10), 20, 20);
+                        ctx.stroke();
+                        break;
+                    case 2:
+                        ctx.fillStyle = 'black';
+                        ctx.beginPath();
+                        ctx.arc( (i % 3) * (gameWidth / 3) + (((gameWidth/3) / 2) - 4), Math.floor(i / 3) * (gameHeight / 3) + (((gameHeight/3) / 2) - 4), 10, 0, 2 * Math.PI);
+                        ctx.stroke();
+                        break;
+                    default:
+                        break;
+                }
+            }
+        }
+    }
+
+    class AI{
+        constructor(player, alpha, gamma) {
+            this.player = player;
+            this.gamma = gamma;
+            this.alpha = alpha;
+
+            this.QTable = {}
+            this.states = [];
+            this.lastState;
+            this.moveHistory = [];
+        }
+
+        _get_state(){
+            //load current panels into state
+            var newState = [...board.board]
+            return newState;
+        }
+
+        _action_interface(a){
+
+            board._make_move(a, this.player)
+            if(this.player == 1){
+                currentPlayer = 2
+            }else{
+                currentPlayer = 1
+            }
+        }
+
+        _get_Q(s){
+            if(!(s in this.QTable)){
+                var tempValues = []
+                for(var i = 0; i < 9; i++){
+                    tempValues.push(0.8)
+                }
+                this.QTable[s] = tempValues;
+            }
+            
+            return this.QTable[s]
+        }
+
+        _set_Q(s, i, r){
+            if(!(s in this.QTable)){
+                var tempValues = []
+                for(var i = 0; i < 9; i++){
+                    tempValues.push(0.8)
+                }
+                this.QTable[s] = tempValues;
+            }
+            this.QTable[s][i] = r;
+        }
+
+        _get_action(state){
+            var rewards = this._get_Q(state)
+            while(true){
+                var m = rewards.indexOf(Math.max(...rewards));
+
+                if(board._is_move_legal(m)){
+                    this.moveHistory.unshift([state, m])
+                    return m;    
+                }else{
+                    this._set_Q(state, m, -1);
+                }                
+                
+            }
+        }
+
+        _set_reward(){
+            var rewardForState;
+            if(playerWon == this.player){
+                rewardForState = 1.0 ;
+            }else if(playerWon == 3){
+                //tie
+                rewardForState = 0.5;
+            }            
+            else{
+                rewardForState = 0.0;
+            }
+            var nextMax = -1;
+            this.moveHistory.forEach((h)=>{
+                
+                var rewards = this._get_Q(h[0])
+
+                if(nextMax < 0){
+                    this._set_Q(h[0], h[1], rewardForState);
+                }else{
+                    var a = this._get_Q(h[0])[h[1]] 
+
+                    var updateValue =  this._get_Q(h[0])[h[1]] * (1 - this.alpha) + this.alpha * this.gamma * nextMax;
+                    this._set_Q(h[0], h[1], updateValue);
+                    var b =  this._get_Q(h[0])[h[1]]
+
+                }
+                nextMax = Math.max(...rewards)
+            })
+
+            this.moveHistory = [];
+        }
+
+    }
+
+    var board = new Board();
+    var ai1 = new AI(1, 0.7, 0.8);
+    var ai2 = new AI(2, 0.7, 0.8);
+
+    function _init(){
+        board._draw_board();
+    }
+
+    function _reset_game(){
+        board._reset();
+    }
+
+    function _update_game(){
+        if(started){
+            ctx.fillStyle = 'white';
+            ctx.fillRect(0, 0, gameWidth, gameHeight);
+            ctx.stroke();
+            board._draw_board();
+
+        }
+    }
+
+    function _main_loop(){
+        //onsole.log("-tick player: ",currentPlayer, " -")
+        _update_game();
+
+        if(currentPlayer == 1){ 
+            stateAI1   = ai1._get_state();
+            actionAI1 = ai1._get_action(stateAI1); // s is an array of length 3
+            ai1._action_interface(actionAI1);
+        }else{
+            stateAI2   = ai2._get_state();
+            actionAI2 = ai2._get_action(stateAI2); // s is an array of length 3
+            ai2._action_interface(actionAI2);
+            
+        }
+        
+
+        if(!playerWon == 0){
+            ai1._set_reward();
+            ai2._set_reward();
+           
+            numGame++;
+            switch(playerWon){
+                case 1:
+                    player1wins++;
+                    break;
+                case 2:
+                    player2wins++;
+                    break;
+                case 3:
+                    ties++;
+                    break;
+                default:
+                    break;
+
+            } 
+
+            var chartctx = document.getElementById('myChart').getContext('2d');
+            var myChart = new Chart(chartctx, {
+                type: 'bar',
+                data: {
+                  labels: ["Player 1", "Player 2", "Ties"],
+                  datasets: [
+                    {
+                      backgroundColor: ["#3e95cd", "#8e5ea2","#3cba9f"],
+                      data: [player1wins/numGame, player2wins/numGame, ties/numGame]
+                    }
+                  ]
+                },
+                options: {
+                    animation: false,
+                    scales: {
+                        yAxes: [{
+                            ticks: {
+                                suggestedMin: 0,
+                                suggestedMax: 1
+                            }
+                        }]
+                    }
+                }
+                
+            });
+
+            playerWon = 0;
+            _reset_game();
+        }
+    }
+    _init()
+    var interval = setInterval(_main_loop, 1);
+
+    document.getElementById('setGameSpeed').onclick = () => {
+            var x = parseInt(document.getElementById('gameSpeed').value);
+            window.clearInterval(interval);
+            interval = setInterval(_main_loop, x);
+    }
+
+    document.getElementById('reset').onclick = () => {
+        player1wins = 0;
+        player2wins = 0;
+        ties = 0;
+        numGame = 0;
+    }
+
+</script>
