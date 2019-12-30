@@ -1,0 +1,308 @@
+<head>
+<script src="jquery-3.3.1.min.js"></script>
+</head>
+
+
+<style type="text/css">
+    
+    #canvas{
+        border: solid 1px black;
+    }
+
+</style>
+
+<body>
+    <br>
+<div class="container">
+    <H4>Platform jump - Reinforcement Learning</H4>
+    <div class="row">
+        <div class="col-sm-6" id="game">
+        </div>
+    </div>
+</div>
+</body>
+
+<script>
+    function _clamp(num, min, max){
+        return num <= min ? min : num >= max ? max : num;
+    }
+
+    document.getElementById("game").innerHTML = '<canvas id="canvas" width="800" height="100"></canvas>';
+
+    var canvas = $("#canvas")[0];
+    var ctx = canvas.getContext("2d");
+    var gameWidth = $("#canvas").width();
+    var gameHeight = $("#canvas").height();
+    var nextPanelTime = 200;
+    var started = false;
+    var QTable = {};
+
+    class Panel{
+        constructor(x, y, w, h){
+            this.x = x;
+            this.y = y;
+            this.width = w;
+            this.height = h;
+        }
+
+        _move_panel(){
+            this.x -= 2;
+        }
+
+        _draw_panel(){
+            ctx.strokeStyle = "black";
+            ctx.strokeRect(this.x, this.y, this.width, this.height);
+        }
+    }
+
+    class Player{
+        constructor(x, y){
+            this.x = x;
+            this.y = y;
+            this.height = 10;
+            this.width = 10;
+            this.speedY = 0;    
+            this.gravity = 0.10;
+            this.gravitySpeed = 0;
+            this.friction = 0.05;
+            this.jumping = false;
+        }
+
+        _update(){
+            this._apply_gravity();
+            this._collision();
+            this._draw();
+            
+        }
+
+        _move(action){
+            switch(action) {
+                case "jump":
+                    if(!this.jumping){
+                        this.speedY += -3;
+                        this.jumping = true;
+                    }
+                    break;
+                default:
+                    return;
+            }
+        }
+
+        _collision(){
+            var collision = false;
+
+            panels.forEach((panel)=>{
+                if (this.x < panel.x + panel.width &&
+                   this.x + this.width > panel.x &&
+                   this.y < panel.y + panel.height &&
+                   this.y + this.height > panel.y) {
+                    var rockbottom = panel.y - this.height;
+                    this.y = rockbottom;
+                    this.gravitySpeed = 0;
+                    collision = true;
+                    started = false;
+                }
+
+            })
+
+
+            var rockbottom = gameHeight - this.height;
+            if (this.y > rockbottom) {
+                this.y = rockbottom;
+                this.gravitySpeed = 0;
+                collision = true;
+            }
+
+            if(collision){
+                if(this.jumping){
+                    this.jumping = false;
+                    this.speedY = 0;
+                }
+            }else{
+
+            }
+        }
+
+        _apply_gravity(){
+            //console.log(this.speedY)
+            this.gravitySpeed += this.gravity;
+            this.y += this.speedY + this.gravitySpeed; 
+        }
+
+
+        _draw(){
+            ctx.fillStyle = "red";
+            ctx.fillRect(this.x, this.y, this.width, this.height);
+        }
+    }
+
+    var panels = [];
+    var player = new Player(10, 10);
+    
+    function _init(){
+        _create_panels();
+        player._draw();
+        nextPanelTime = 200;
+    }
+
+
+    function _create_panels(numPanels = 1){
+        panels.push(new Panel(gameWidth, gameHeight - 25, 10, 25));
+    }
+    function _reset_game(){
+        started = true;
+        panels = [];
+        _init();
+    }
+
+    function _update_game(){
+        if(started){
+            ctx.fillStyle = 'white';
+            ctx.fillRect(0, 0, gameWidth, gameHeight);
+            
+            for (var i = 0; i < panels.length; i++) {
+                panels[i]._move_panel();
+                panels[i]._draw_panel();
+            }
+
+            player._update();
+
+            nextPanelTime -= 1;
+
+            if (nextPanelTime <= 0) {
+                panels.push(new Panel(gameWidth, gameHeight - 25, 10, 25));
+                nextPanelTime = Math.max(75, Math.floor(Math.random() * 300));
+            }
+
+            if(panels[0].x < -10){
+                panels.shift();
+            }
+
+        }
+    }
+
+    $(document).keydown(function(e) {
+        var key = e.which;
+        if (key == "32"){
+            player._move("jump");  
+        }else if(!started){
+            started = true;
+            _reset_game();
+        }
+    })
+
+
+
+
+    class jumperAI{
+        constructor() {
+            this.playerX = player.x;
+            this.playerJumping = player.jumping;
+            this.gamma = 1;
+            this.alpha = 0.7;
+
+            this.actionSet = {
+                JUMP : 1,
+                STAY: 2
+            }
+
+            this.states = [];
+        }
+
+        _reset(){
+            this.playerX = player.x;
+            this.playerJumping = player.jumping;
+            this.gamma = 1;
+            this.alpha = 0.7;
+
+            this.actionSet = {
+                JUMP : 1,
+                STAY: 2
+            }
+
+            this.states = [];
+        }
+
+        _get_state(){
+            //load current panels into state
+            this.s = [panels[0].x]
+            return this.s;
+        }
+
+        _action_interface(a){
+            if(a == 1){
+                player._move("jump")
+            }
+        }
+
+        _get_Q(s, a){
+            var config = [s[0], a]
+            if(!(config in QTable)){
+                return 0;
+            }
+
+            return QTable[config]
+        }
+
+        _set_Q(s, a, r){
+            var config = [s[0], a]
+            if(!(config in QTable)){
+                QTable[config] = 0;
+            }
+
+            QTable[config] += r;
+        }
+
+        _get_action(state){
+            var rewardForJump = this._get_Q(state, this.actionSet.JUMP);
+            var rewardForStay = this._get_Q(state, this.actionSet.STAY);
+
+            if (rewardForJump > rewardForStay) {
+                // If reward for Stay is higher, command the flappy bird to stay
+
+                return this.actionSet.JUMP;
+            } else {
+                return this.actionSet.STAY; 
+            }
+        }
+
+        _set_reward(s, a){
+            var rewardForState=0;
+            var futureState = this._get_state();
+
+            //Try old rewarding method
+            if(started == true){
+              rewardForState = 1 ;
+            }
+            else{
+              rewardForState = -1000;
+            }
+
+            var optimalFutureValue = Math.max(this._get_Q(futureState, this.actionSet.STAY), 
+                                              this._get_Q(futureState, this.actionSet.JUMP));
+            var updateValue = this.alpha*(rewardForState + this.gamma * optimalFutureValue - this._get_Q(s, a));
+
+            this._set_Q(s, a, updateValue);
+        }
+    }
+
+    _init();
+    var ai = new jumperAI();
+    var stateAI = ai._get_state();
+    var actionAI = ai._get_action(stateAI);
+
+    function _main_loop(){
+        if(started){
+            _update_game();
+            ai._set_reward(stateAI, actionAI);
+            stateAI   = ai._get_state();
+            actionAI = ai._get_action(stateAI);
+            ai._action_interface(actionAI);
+        }else{
+            _reset_game();
+        }
+    }
+
+    setInterval(_main_loop, 1);
+
+</script>
